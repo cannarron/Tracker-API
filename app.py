@@ -8,6 +8,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
+import webscrape
 
 app = Flask(__name__)
 CORS(app)
@@ -24,9 +25,8 @@ def verify_password(hash_value, password):
 
 # MongoDB connection
 try:
-    client = MongoClient('mongodb+srv://jtechlab2007:TESTINGMONGO@tracker.afoar.mongodb.net/?retryWrites=true&w=majority&appName=Tracker')
+    client = MongoClient('mongodb+srv://admin:devbuilds@cluster0.jqk39.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
     db = client['Tracker']
-    db.create_collection("users")
     users_collection = db['users']
 except Exception as e:
     print(f"MongoDB connection error: {e}")
@@ -64,7 +64,8 @@ def token_required(f):
             
         try:
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = users.get(data['username'])
+            print(data)
+            current_user = User.find_by_username(data['username'])
             if not current_user:
                 return jsonify({'error': 'Invalid token'}), 401
         except:
@@ -125,43 +126,6 @@ def scrape_website(url, device_name=None):
         print(f"An error occurred: {e}")
         return []
 
-# Function to feed URL directly to Gemini
-def analyze_url_with_gemini(url, device_name=None):
-    try:
-        import google.generativeai as genai
-        
-        genai.configure(api_key='YOUR_GEMINI_API_KEY')
-        model = genai.GenerativeModel('gemini-pro')
-
-        prompt = f"""
-        Visit this URL and extract product information: {url}
-        Return only JSON format with these fields:
-        name, price, url
-        """
-        
-        response = model.generate_content(prompt)
-        products = []
-        
-        try:
-            extracted_data = eval(response.text)
-            if isinstance(extracted_data, list):
-                for item in extracted_data:
-                    if device_name is None or device_name.lower() in item['name'].lower():
-                        products.append({
-                            'name': item['name'],
-                            'price': item['price'],
-                            'url': url
-                        })
-            return products
-        except Exception as e:
-            print(f"Error parsing Gemini response: {e}")
-            return []
-            
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return []
-
-
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -218,15 +182,13 @@ def get_user_info(username):
 @app.route('/api/scrape', methods=['GET'])
 @token_required
 def scrape(username):
-    # Your existing scrape code here
-    urls = request.args.getlist('url')
     device_name = request.args.get('device_name')
-    if not urls:
-        return jsonify({"error": "No URLs provided"}), 400
+
+    data = [1,2,3,4]
 
     all_products = []
-    for url in urls:
-        products = scrape_website(url, device_name)
+    for i in data:
+        products = webscrape.get_phone_price_idealo(device_name)
         all_products.extend(products)
 
     return jsonify(all_products)
