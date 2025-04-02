@@ -180,18 +180,18 @@ def get_user_info(username):
 
 # Protect your scrape route with token authentication
 @app.route('/api/scrape', methods=['GET'])
-@token_required
-def scrape(username):
+# @token_required
+def scrape():
     device_name = request.args.get('device_name')
 
-    data = [1,2,3,4]
+    # data = [1,2,3,4]
 
-    all_products = []
-    for i in data:
-        products = webscrape.get_phone_price_idealo(device_name)
-        all_products.extend(products)
+    # all_products = []
+    # for i in data:
+    products = webscrape.get_phone_price_idealo(device_name)
+    # all_products.extend(products)
 
-    return jsonify(all_products)
+    return jsonify(products)
 
 if __name__ == '__main__':
     app.run(debug=True)
