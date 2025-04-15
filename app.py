@@ -33,21 +33,23 @@ except Exception as e:
 
 # User model class
 class User:
-    def __init__(self, username, password):
-        self.username = username
+    def __init__(self, email, username, password):
+        self.email = email
         self.password = password
+        self.username = username
         self.created_at = datetime.utcnow()
 
     def to_dict(self):
         return {
-            'username': self.username,
+            'email': self.email,
             'password': self.password,
+            'username': self.username,
             'created_at': self.created_at
         }
 
     @staticmethod
-    def find_by_username(username):
-        return users_collection.find_one({'username': username})
+    def find_by_email(email):
+        return users_collection.find_one({'email': email})
 
     def save(self):
         return users_collection.insert_one(self.to_dict())
@@ -65,81 +67,52 @@ def token_required(f):
         try:
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             print(data)
-            current_user = User.find_by_username(data['username'])
+            current_user = User.find_by_email(data['email'])
             if not current_user:
                 return jsonify({'error': 'Invalid token'}), 401
         except:
             return jsonify({'error': 'Invalid token'}), 401
             
-        return f(data['username'], *args, **kwargs)
+        return f(data['email'], *args, **kwargs)
     return decorated
 
-# Function to scrape data from a given URL
-def scrape_website(url, device_name=None):
-    try:
-        import google.generativeai as genai
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
+def phones_script(device_name):
+    all_data = []
+    # product1 = webscrape.get_phone_price_idealo(device_name)
+    # if product1 != None:
+    #     all_data.extend(product1)
+    product2 = webscrape.get_phone_price_mozillion(device_name)
+    if product2 != None:
+        all_data.extend(product2)
+    product3 = webscrape.get_phone_price_ssg_reboxed(device_name)
+    if product3 == []:
+        product3 = webscrape.get_phone_price_ft_reboxed(device_name)
+    if product3 != None:
+        all_data.extend(product3)
+    if all_data != []:
+        cheapest_phone = min(all_data, key=lambda x: float(x['price']))
+        all_data.remove(cheapest_phone)
+        return {"products":all_data, "best":cheapest_phone}
+    return {"message":"Device Unavailable"}
 
-        # Configure Gemini
-        genai.configure(api_key='YOUR_GEMINI_API_KEY')
-        model = genai.GenerativeModel('gemini-pro')
 
-        # Extract the main content
-        content = soup.get_text()
-        
-        # Ask Gemini to analyze the content and extract product information
-        prompt = f"""
-        Extract product information from this content. Return only JSON format with fields:
-        name, price, url
-        Content: {content[:4000]}  # Limiting content length
-        """
-        
-        response = model.generate_content(prompt)
-        products = []
-        
-        try:
-            # Parse Gemini's response into structured data
-            extracted_data = eval(response.text)  # Be careful with eval
-            if isinstance(extracted_data, list):
-                for item in extracted_data:
-                    if device_name is None or device_name.lower() in item['name'].lower():
-                        products.append({
-                            'name': item['name'],
-                            'price': item['price'],
-                            'url': url
-                        })
-        except Exception as e:
-            print(f"Error parsing Gemini response: {e}")
-            
-        return products
 
-    except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}")
-        return []
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return []
 
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
-    username = data.get('username')
+    email = data.get('email')
     password = data.get('password')
     
-    if not username or not password:
-        return jsonify({"error": "Username and password required"}), 400
+    if not email or not password:
+        return jsonify({"error": "Email and password required"}), 400
     
-    if User.find_by_username(username):
-        return jsonify({"error": "Username already exists"}), 400
+    if User.find_by_email(email):
+        return jsonify({"error": "Email already exists"}), 400
         
     hashed_password = hash_password(password)
-    user = User(username=username, password=hashed_password)
+    username = email.split('@')[0]
+    user = User(email=email, username=username, password=hashed_password)
     user.save()
     
     return jsonify({"message": "Registration successful"}), 201
@@ -147,18 +120,18 @@ def register():
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    username = data.get('username')
+    email = data.get('email')
     password = data.get('password')
     
-    if not username or not password:
-        return jsonify({"error": "Username and password required"}), 400
+    if not email or not password:
+        return jsonify({"error": "Email and password required"}), 400
         
-    user = User.find_by_username(username)
+    user = User.find_by_email(email)
     if not user or not verify_password(user['password'], password):
         return jsonify({"error": "Invalid credentials"}), 401
         
     token = jwt.encode({
-        'username': username,
+        'email': email,
         'exp': datetime.utcnow() + timedelta(hours=24)
     }, SECRET_KEY, algorithm="HS256")
         
@@ -170,12 +143,34 @@ def login():
 
 @app.route('/api/user', methods=['GET'])
 @token_required
-def get_user_info(username):
+def get_user_info(email):
     
     return jsonify({
-        "username": username,
+        "email": email,
         # Add any other user info you want to return
     }), 200
+
+@app.route('/api/all/users', methods=['GET'])
+@token_required  # Adding token protection for security
+def get_all_users():
+    try:
+        # Get all users from MongoDB
+        users = list(users_collection.find({}, {'password': 0}))  # Exclude password field for security
+        
+        # Convert ObjectId to string for JSON serialization
+        for user in users:
+            user['_id'] = str(user['_id'])
+            user['created_at'] = user['created_at'].isoformat() if 'created_at' in user else None
+        
+        return jsonify({
+            "message": "Users retrieved successfully",
+            "users": users
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to retrieve users",
+            "details": str(e)
+        }), 500
 
 
 # Protect your scrape route with token authentication
@@ -183,15 +178,12 @@ def get_user_info(username):
 # @token_required
 def scrape():
     device_name = request.args.get('device_name')
+    if not device_name:
+        return jsonify({"error": "Device name is required"}), 400
+    results = phones_script(device_name)
 
-    # data = [1,2,3,4]
 
-    # all_products = []
-    # for i in data:
-    products = webscrape.get_phone_price_idealo(device_name)
-    # all_products.extend(products)
-
-    return jsonify(products)
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(debug=True)
