@@ -38,7 +38,7 @@ def get_phone_price_idealo(phone_name):
             print(f"Failed to retrieve data (Status Code: {response.status_code})")
             return final_data
         
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
         
         # Find all product containers
         products = soup.find_all("div", class_="sr-resultItemLink_YbJS7")
@@ -85,7 +85,7 @@ def get_phone_price_mozillion(phone_name):
             print(f"Failed to retrieve data for page {page} (Status Code: {response.status_code})")
             continue
         
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
         
         products = soup.find("div", class_="show-ph-list")
         if not products:
@@ -133,7 +133,7 @@ def get_phone_price_ssg_reboxed(phone_name):
             print(f"Failed to retrieve data for page {page} (Status Code: {response.status_code})")
             continue
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
             
         products = soup.find("div", class_="product-list--collection")
         if not products:
@@ -187,7 +187,7 @@ def get_phone_price_ft_reboxed(phone_name):
             print(f"Failed to retrieve data for page {page} (Status Code: {response.status_code})")
             continue
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "lxml")
             
         # Find all product listings
         products = soup.find("div", class_="product-list--collection")
