@@ -33,20 +33,24 @@ except Exception as e:
 
 # User model class
 class User:
-    def __init__(self, email, username, password):
+    def __init__(self, username, email, password):
+        self.username = username
         self.email = email
         self.password = password
-        self.username = username
         self.created_at = datetime.utcnow()
 
     def to_dict(self):
         return {
+            'username': self.username,
             'email': self.email,
             'password': self.password,
-            'username': self.username,
             'created_at': self.created_at
         }
 
+    @staticmethod
+    def find_by_username(username):
+        return users_collection.find_one({'username': username})
+    
     @staticmethod
     def find_by_email(email):
         return users_collection.find_one({'email': email})
@@ -101,21 +105,38 @@ def phones_script(device_name):
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
+    username = data.get('username')
     email = data.get('email')
     password = data.get('password')
     
-    if not email or not password:
-        return jsonify({"error": "Email and password required"}), 400
+    if not username or not email or not password:
+        return jsonify({"error": "Username, email and password required"}), 400
     
+    if User.find_by_username(username):
+        return jsonify({"error": "Username already exists"}), 400
+        
     if User.find_by_email(email):
         return jsonify({"error": "Email already exists"}), 400
         
     hashed_password = hash_password(password)
-    username = email.split('@')[0]
-    user = User(email=email, username=username, password=hashed_password)
+    user = User(username=username, email=email, password=hashed_password)
     user.save()
     
-    return jsonify({"message": "Registration successful"}), 201
+    # Generate token after successful registration
+    token = jwt.encode({
+        'email': email,
+        'username': username,
+        'exp': datetime.utcnow() + timedelta(hours=24)
+    }, SECRET_KEY, algorithm="HS256")
+    
+    return jsonify({
+        "message": "Registration successful",
+        "token": token,
+        "user": {
+            "username": username,
+            "email": email
+        }
+    }), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -132,12 +153,17 @@ def login():
         
     token = jwt.encode({
         'email': email,
+        'username': user['username'],
         'exp': datetime.utcnow() + timedelta(hours=24)
     }, SECRET_KEY, algorithm="HS256")
         
     return jsonify({
         "message": "Login successful",
-        "token": token
+        "token": token,
+        "user": {
+            "username": user['username'],
+            "email": email
+        }
     }), 200
 
 
