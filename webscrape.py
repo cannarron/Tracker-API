@@ -229,6 +229,52 @@ def get_phone_price_ft_reboxed(phone_name):
     
     return final_data
 
+
+def envirofone_script(phone_name):
+	final_data = []
+
+	final_data = []
+	base_url = "https://www.envirofone.com/en-gb/buy/refurbished-mobile-phones/search?instock=True&page={}"
+	
+	for page in range(1, 9):  # This will iterate from page 1 to 8
+		try:
+			response = requests.get(base_url.format(page))
+			soup = BeautifulSoup(response.text, "html.parser")
+			products = soup.find("div", class_="search-results")
+
+			if not products:
+				continue
+
+			items = products.find_all("div", class_="block-grid-item sr")
+			for product in items:
+				price = product.find("span", class_="sr-price")
+				price = price.text.strip().replace('£', '') if price else "N/A"
+				image_url = product.find("img")['src']
+				device_url_tag = product.find("a")['href']
+				device_url = "https://www.envirofone.com" + device_url_tag if device_url_tag else None
+				title_tag_parent = product.find("div", class_="sr-product-name")
+				if title_tag_parent:
+					title = title_tag_parent.find("span", class_="lbl-small").text.strip()
+					
+				if phone_name.lower() in title.lower():
+					final_data.append({
+						'title': title,
+						'price': price,
+						'image_url': image_url,
+						'device_url': device_url,
+						"vendor": "envirofone"
+					})
+			
+			# Add a small delay between requests to be polite to the server
+			time.sleep(1)
+			
+		except Exception as e:
+			print(f"Error on page {page}: {e}")
+			continue
+
+	return final_data
+
+    
 # print(get_phone_price_mozillion("Samsung Galaxy S25 Ultra"))
 # Samsung Galaxy A55
 # print(get_phone_price_idealo("Apple iPhone 16"))

@@ -93,6 +93,9 @@ def phones_script(device_name):
         product3 = webscrape.get_phone_price_ft_reboxed(device_name)
     if product3 != None:
         all_data.extend(product3)
+    product4 = webscrape.envirofone_script(device_name)
+    if product4 != None:
+        all_data.extend(product4)
     if all_data != []:
         cheapest_phone = min(all_data, key=lambda x: float(x['price']))
         all_data.remove(cheapest_phone)
@@ -100,7 +103,9 @@ def phones_script(device_name):
     return {"message":"Device Unavailable"}
 
 
-
+@app.route('/', methods=['HEAD'])
+def home():
+    return {"Status": 200}
 
 @app.route('/api/register', methods=['POST'])
 def register():
