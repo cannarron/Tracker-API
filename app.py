@@ -86,6 +86,22 @@ def token_required(f):
         return f(data['email'], *args, **kwargs)
     return decorated
 
+def clean_price(price_str):
+    """Convert price string to float, handling special cases"""
+    if not isinstance(price_str, str):
+        return float('inf')  # Handle non-string prices
+    
+    # Handle special cases
+    if 'offer' in price_str.lower() or not price_str.strip():
+        return float('inf')  # Treat "Make an offer" as infinity
+        
+    # Clean the price string
+    try:
+        cleaned = price_str.replace('£', '').replace('$', '').replace(',', '').strip()
+        return float(cleaned)
+    except (ValueError, AttributeError):
+        return float('inf')  # Return infinity for any invalid price
+
 def phones_script(device_name):
     all_data = []
     # product1 = webscrape.get_phone_price_idealo(device_name)
@@ -102,11 +118,20 @@ def phones_script(device_name):
     product4 = webscrape.envirofone_script(device_name)
     if product4 != None:
         all_data.extend(product4)
-    if all_data != []:
-        cheapest_phone = min(all_data, key=lambda x: float(x['price'].replace('£', '').replace(',', '')))
-        all_data.remove(cheapest_phone)
-        return {"products":all_data, "best":cheapest_phone}
-    return {"message":"Device Unavailable"}
+    if all_data:
+        try:
+            # Use the clean_price function to handle price conversion
+            cheapest_phone = min(all_data, key=lambda x: clean_price(x.get('price', '')))
+            all_data.remove(cheapest_phone)
+            
+            # Only return the phone if it has a valid price
+            if clean_price(cheapest_phone.get('price', '')) != float('inf'):
+                return {"products": all_data, "best": cheapest_phone}
+            
+        except Exception as e:
+            print(f"Error processing prices: {e}")
+    
+    return {"message": "Device Unavailable"}
 
 
 @app.route('/', methods=['HEAD'])
