@@ -274,11 +274,52 @@ def envirofone_script(phone_name):
 
 	return final_data
 
-    
-# print(get_phone_price_mozillion("Samsung Galaxy S25 Ultra"))
-# Samsung Galaxy A55
-# print(get_phone_price_idealo("Apple iPhone 16"))
+def scrape_ur_collections(phone_name):
+	final_data = []
+	
+	for page in range(1, 8):  # Scrape pages 1 through 7
+		url = f"https://www.ur.co.uk/collections/all?page={page}"
+		response = requests.get(url)
 
-# print(get_phone_price_ssg_reboxed("Samsung Galaxy S23 Plus 5G 256GB"))
-# print(get_phone_price_ft_reboxed("iPhone 14"))
+		soup = BeautifulSoup(response.text, "html.parser")
+		products = soup.find("div", class_="product-list")
 
+		if not products:  # If no products found, break the loop
+			break
+
+		items = products.find_all("div", class_="product-item")
+		for product in items:    
+			title_tag = product.find("a", class_="product-item__title text--strong link")
+			title = title_tag.text.strip()
+			print(title)
+			try:
+				price_tag_parent = product.find("span", class_="price price--highlight")
+				price_tag = price_tag_parent.find("span")
+				price = price_tag.text.strip().replace('£', '')
+				print(price)
+			except AttributeError:
+				price_tag = product.find("span", class_="price price--highlight")
+				price = price_tag.text.strip().replace('£', '')
+				print(price)
+			device_url_tag = product.find("a", class_="product-item__image-wrapper")
+			device_url = "https://www.ur.co.uk" + device_url_tag['href'] if device_url_tag else None
+			print(device_url)
+			image_tag = product.find("img", class_="product-item__primary-image")
+			image = image_tag['src']
+			cleaned_image = image.replace('//', 'https://')
+			print(cleaned_image)
+			details = image_tag["alt"]
+			print(details)
+
+			if phone_name.lower() in title.lower():
+				final_data.append({
+					'title': title,
+					'price': price,
+					'image_url': cleaned_image,
+					"device_url": device_url,
+					"vendor": "ur.co.uk"
+				})
+
+		time.sleep(1)  # Add a delay between pages to be polite
+
+	return final_data

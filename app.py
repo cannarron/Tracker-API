@@ -9,12 +9,17 @@ from datetime import datetime, timedelta
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 import webscrape
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 
-SECRET_KEY = 'your-secret-key'  # Change this to a secure secret key
+SECRET_KEY = os.getenv('SECRET_KEY')
+app.config['SECRET_KEY'] = SECRET_KEY
 
 
 def hash_password(password):
@@ -25,9 +30,10 @@ def verify_password(hash_value, password):
 
 # MongoDB connection
 try:
-    client = MongoClient('mongodb+srv://admin:devbuilds@cluster0.jqk39.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
-    db = client['Tracker']
+    client = MongoClient(os.getenv('MONGODB_URI'))
+    db = client[os.getenv('DB_NAME')]
     users_collection = db['users']
+    phones_collection = db['phones']  # Add this line
 except Exception as e:
     print(f"MongoDB connection error: {e}")
 
@@ -97,7 +103,7 @@ def phones_script(device_name):
     if product4 != None:
         all_data.extend(product4)
     if all_data != []:
-        cheapest_phone = min(all_data, key=lambda x: float(x['price']))
+        cheapest_phone = min(all_data, key=lambda x: float(x['price'].replace('£', '').replace(',', '')))
         all_data.remove(cheapest_phone)
         return {"products":all_data, "best":cheapest_phone}
     return {"message":"Device Unavailable"}
@@ -203,6 +209,11 @@ def get_all_users():
             "details": str(e)
         }), 500
 
+# Find the most similar device name using string similarity
+def similarity_score(s1, s2):
+    s1, s2 = s1.lower(), s2.lower()
+    return sum(a == b for a, b in zip(s1, s2)) / max(len(s1), len(s2))
+
 
 # Protect your scrape route with token authentication
 @app.route('/api/scrape', methods=['GET'])
@@ -211,10 +222,69 @@ def scrape():
     device_name = request.args.get('device_name')
     if not device_name:
         return jsonify({"error": "Device name is required"}), 400
-    results = phones_script(device_name)
 
+    # Check cache first
+    # Create a case-insensitive regex pattern for partial matching
+    # Get all device names from the database
+    all_devices = list(phones_collection.distinct("device_name"))
+    print(all_devices)
+    
+    if all_devices:
+        closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
+    
+        # Only return if similarity is above threshold
+        if similarity_score(closest_match, device_name) > 0.5:
+            cached_data = phones_collection.find_one({"device_name": closest_match})
+        else:
+            cached_data = None
+        
+        if cached_data:
+            return jsonify(cached_data['products']), 200
+
+    # If not in cache or cache is old, scrape new data
+    results = phones_script(device_name)
+    
+    if 'message' not in results:  # Only cache if we got valid results
+        # Prepare document for MongoDB
+        document = {
+            "device_name": device_name,
+            "products": results,
+        }
+        
+        # Update or insert the document
+        phones_collection.update_one(
+            {"device_name": device_name},
+            {"$set": document},
+            upsert=True
+        )
 
     return jsonify(results)
+
+@app.route('/api/refresh-cache', methods=['POST'])
+@token_required
+def refresh_cache():
+    device_name = request.json.get('device_name')
+    if not device_name:
+        return jsonify({"error": "Device name is required"}), 400
+        
+    results = phones_script(device_name)
+    
+    if 'message' not in results:
+        document = {
+            "device_name": device_name,
+            "products": results.get('products', []),
+            "best": results.get('best', {}),
+            "last_updated": datetime.utcnow()
+        }
+        
+        phones_collection.update_one(
+            {"device_name": device_name},
+            {"$set": document},
+            upsert=True
+        )
+        return jsonify({"message": "Cache updated successfully"}), 200
+    
+    return jsonify({"error": "Failed to update cache"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
