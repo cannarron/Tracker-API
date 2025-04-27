@@ -280,7 +280,7 @@ def scrape():
         closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
     
         # Only return if similarity is above threshold
-        if similarity_score(closest_match, device_name) > 0.85:
+        if similarity_score(closest_match, device_name) > 0.95:
             cached_data = phones_collection.find_one({"device_name": closest_match})
         else:
             cached_data = None
