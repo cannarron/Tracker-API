@@ -11,8 +11,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import webscrape
 from dotenv import load_dotenv
 import os
+import google.generativeai as genai
 
 load_dotenv()
+
+# Configure Gemini API
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel('gemini-pro')
+
 
 app = Flask(__name__)
 CORS(app)
@@ -273,7 +280,7 @@ def scrape():
         closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
     
         # Only return if similarity is above threshold
-        if similarity_score(closest_match, device_name) > 0.7:
+        if similarity_score(closest_match, device_name) > 0.85:
             cached_data = phones_collection.find_one({"device_name": closest_match})
         else:
             cached_data = None
@@ -325,6 +332,27 @@ def refresh_cache():
         return jsonify({"message": "Cache updated successfully"}), 200
     
     return jsonify({"error": "Failed to update cache"}), 400
+
+def get_device_insights(device_name, price_data):
+    """Get AI-powered insights about the device and pricing"""
+    try:
+        prompt = f"""
+        Analyze this phone: {device_name}
+        Current market prices: {price_data}
+        
+        Please provide:
+        1. Brief device overview
+        2. Whether current prices are good deals
+        3. Alternative recommendations in similar price range
+        4. Best time to buy based on price trends
+        Provide response in JSON format with keys: overview, price_analysis, alternatives, buying_advice
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        return None
 
 if __name__ == '__main__':
     app.run(debug=True)
