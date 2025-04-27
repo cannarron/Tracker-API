@@ -107,17 +107,32 @@ def phones_script(device_name):
     # product1 = webscrape.get_phone_price_idealo(device_name)
     # if product1 != None:
     #     all_data.extend(product1)
-    product2 = webscrape.get_phone_price_mozillion(device_name)
-    if product2 != None:
-        all_data.extend(product2)
-    product3 = webscrape.get_phone_price_ssg_reboxed(device_name)
-    if product3 == []:
-        product3 = webscrape.get_phone_price_ft_reboxed(device_name)
-    if product3 != None:
-        all_data.extend(product3)
-    product4 = webscrape.envirofone_script(device_name)
-    if product4 != None:
-        all_data.extend(product4)
+    try:
+        product2 = webscrape.get_phone_price_mozillion(device_name)
+        if product2 != None:
+            all_data.extend(product2)
+    except Exception as e:
+        print(f"Error scraping Mozillion: {e}")
+
+    try:
+        product3 = webscrape.get_phone_price_ssg_reboxed(device_name)
+        if product3 == []:
+            try:
+                product3 = webscrape.get_phone_price_ft_reboxed(device_name)
+            except Exception as e:
+                print(f"Error scraping FT Reboxed: {e}")
+                product3 = None
+        if product3 != None:
+            all_data.extend(product3)
+    except Exception as e:
+        print(f"Error scraping SSG Reboxed: {e}")
+
+    try:
+        product4 = webscrape.envirofone_script(device_name)
+        if product4 != None:
+            all_data.extend(product4)
+    except Exception as e:
+        print(f"Error scraping Envirofone: {e}")
     if all_data:
         try:
             # Use the clean_price function to handle price conversion
@@ -258,7 +273,7 @@ def scrape():
         closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
     
         # Only return if similarity is above threshold
-        if similarity_score(closest_match, device_name) > 0.5:
+        if similarity_score(closest_match, device_name) > 0.7:
             cached_data = phones_collection.find_one({"device_name": closest_match})
         else:
             cached_data = None

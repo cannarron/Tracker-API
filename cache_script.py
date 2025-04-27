@@ -39,11 +39,9 @@ class Phones:
 
 # Example usage:
 popular_phones = [
-	"iphone 15 pro",
+	"iphone 13 pro",
 	"samsung galaxy s24",
-	"google pixel 8",
-	"iphone 7",
-	"vivo"
+	"google pixel 6",
 ]
 
 for phone in popular_phones:
