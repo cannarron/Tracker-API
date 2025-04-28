@@ -18,7 +18,7 @@ load_dotenv()
 # Configure Gemini API
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 
 app = Flask(__name__)
@@ -274,7 +274,6 @@ def scrape():
     # Create a case-insensitive regex pattern for partial matching
     # Get all device names from the database
     all_devices = list(phones_collection.distinct("device_name"))
-    print(all_devices)
     
     if all_devices:
         closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
@@ -284,14 +283,45 @@ def scrape():
             cached_data = phones_collection.find_one({"device_name": closest_match})
         else:
             cached_data = None
-        
+
+        # Get device details for cached data
         if cached_data:
+            # Get details for products list
+            for product in cached_data['products']['products']:
+                device_name = product.get('title')
+                if device_name:
+                    specs = " "
+                    # get_device_details(device_name)
+                    product['specs'] = specs
+
+            # Get details for best product
+            best_device = cached_data['products']['best'].get('title')
+            if best_device:
+                best_specs = get_device_details(best_device)
+                cached_data['products']['best']['specs'] = best_specs
+        
+    
+            # print(cached_data['products'])
             return jsonify(cached_data['products']), 200
 
     # If not in cache or cache is old, scrape new data
     results = phones_script(device_name)
     
     if 'message' not in results:  # Only cache if we got valid results
+        # Get details for products list
+        for product in results['products']:
+            device_name = product.get('title')
+            if device_name:
+                specs = get_device_details(device_name)
+                product['specs'] = specs
+
+        # Get details for best product
+        best_device = results['best'].get('title')
+        if best_device:
+            best_specs = get_device_details(best_device)
+            results['best']['specs'] = best_specs
+        # print(results)
+
         # Prepare document for MongoDB
         document = {
             "device_name": device_name,
@@ -306,32 +336,7 @@ def scrape():
         )
 
     return jsonify(results)
-
-@app.route('/api/refresh-cache', methods=['POST'])
-@token_required
-def refresh_cache():
-    device_name = request.json.get('device_name')
-    if not device_name:
-        return jsonify({"error": "Device name is required"}), 400
         
-    results = phones_script(device_name)
-    
-    if 'message' not in results:
-        document = {
-            "device_name": device_name,
-            "products": results.get('products', []),
-            "best": results.get('best', {}),
-            "last_updated": datetime.utcnow()
-        }
-        
-        phones_collection.update_one(
-            {"device_name": device_name},
-            {"$set": document},
-            upsert=True
-        )
-        return jsonify({"message": "Cache updated successfully"}), 200
-    
-    return jsonify({"error": "Failed to update cache"}), 400
 
 def get_device_insights(device_name, price_data):
     """Get AI-powered insights about the device and pricing"""
@@ -353,6 +358,30 @@ def get_device_insights(device_name, price_data):
     except Exception as e:
         print(f"Gemini API error: {e}")
         return None
+
+def get_device_details(device_name):
+
+    try:
+        prompt = f"""
+        Provide detailed specifications and features for {device_name}.
+        Include:
+        - Display details
+        - Processor/chipset
+        - RAM and storage options
+        - Camera specifications
+        - Battery capacity
+        - Key features
+        Keep it factual and concise and straight to the point.
+        Example response format: '6.8 Inch Quad HD 200 MP 12 GB RAM 256 GB Android 14 5,000 mAh'
+        """
+        
+        response = model.generate_content(prompt)
+
+        return response.text
+        
+    except Exception as e:
+        return f"Failed to get device details: {str(e)}"
+
 
 if __name__ == '__main__':
     app.run(debug=True)
