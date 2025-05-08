@@ -238,7 +238,9 @@ def envirofone_script(phone_name):
 	
 	for page in range(1, 9):  # This will iterate from page 1 to 8
 		try:
-			response = requests.get(base_url.format(page))
+			response = requests.get(base_url.format(page), timeout=10)
+            if response.status_code != 200:
+                return None
 			soup = BeautifulSoup(response.text, "html.parser")
 			products = soup.find("div", class_="search-results")
 
