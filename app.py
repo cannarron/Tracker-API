@@ -264,16 +264,19 @@ def similarity_score(s1, s2):
 
 # Protect your scrape route with token authentication
 @app.route('/api/scrape', methods=['GET'])
-# @token_required
 def scrape():
     device_name = request.args.get('device_name')
     if not device_name:
         return jsonify({"error": "Device name is required"}), 400
+        
+    device_name = device_name.lower().strip()
+    if len(device_name) < 2:
+        return jsonify({"error": "Device name too short"}), 400
 
     # Check cache first
     # Create a case-insensitive regex pattern for partial matching
-    # Get all device names from the database
-    all_devices = list(phones_collection.distinct("device_name"))
+    # Get all device names from the database and convert to lowercase
+    all_devices = [device_name.lower() for device_name in phones_collection.distinct("device_name") if device_name]
     
     if all_devices:
         closest_match = max(all_devices, key=lambda x: similarity_score(x, device_name))
